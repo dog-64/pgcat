@@ -455,8 +455,25 @@ fn push_server_stats(lines: &mut Vec<String>) {
         for shard in 0..pool.shards() {
             for server in 0..pool.servers(shard) {
                 let address = pool.address(shard, server);
+
+                let state_metrics = [
+                    ("is_banned", if pool.is_banned(address) { 1 } else { 0 }),
+                    ("is_paused", if pool.paused() { 1 } else { 0 }),
+                ];
+
+                for (key, value) in state_metrics {
+                    if let Some(prometheus_metric) =
+                        PrometheusMetric::<u64>::from_server_info(address, key, value)
+                    {
+                        grouped_metrics
+                            .entry(key.to_string())
+                            .or_default()
+                            .push(prometheus_metric);
+                    }
+                }
+
                 if let Some(server_info) = prom_stats.get(&address.name()) {
-                    let metrics = [
+                    let activity_metrics = [
                         ("bytes_received", server_info.bytes_received),
                         ("bytes_sent", server_info.bytes_sent),
                         ("transaction_count", server_info.transaction_count),
@@ -466,10 +483,9 @@ fn push_server_stats(lines: &mut Vec<String>) {
                         ("active_count", server_info.active_count),
                         ("login_count", server_info.login_count),
                         ("tested_count", server_info.tested_count),
-                        ("is_banned", if pool.is_banned(address) { 1 } else { 0 }),
-                        ("is_paused", if pool.paused() { 1 } else { 0 }),
                     ];
-                    for (key, value) in metrics {
+
+                    for (key, value) in activity_metrics {
                         if let Some(prometheus_metric) =
                             PrometheusMetric::<u64>::from_server_info(address, key, value)
                         {
